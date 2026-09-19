@@ -1,0 +1,32 @@
+# CUAV X25 MEGA materials for LCEDA
+newmtl x25_body
+Kd 0.140 0.140 0.160
+Ka 0.05 0.05 0.05
+Ks 0.25 0.25 0.25
+Ns 40
+d 1.0
+illum 2
+
+newmtl x25_core
+Kd 0.620 0.680 0.780
+Ka 0.05 0.05 0.05
+Ks 0.25 0.25 0.25
+Ns 40
+d 1.0
+illum 2
+
+newmtl x25_mounts
+Kd 0.090 0.090 0.100
+Ka 0.05 0.05 0.05
+Ks 0.25 0.25 0.25
+Ns 40
+d 1.0
+illum 2
+
+newmtl x25_ports
+Kd 0.960 0.960 0.940
+Ka 0.05 0.05 0.05
+Ks 0.25 0.25 0.25
+Ns 40
+d 1.0
+illum 2

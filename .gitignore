@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+*.tmp
+
+# Local Cursor / agent junk
+viewer/_cursor_browser_cfg.txt
+tools/pcb_extract.npz
+tools/beam_drawing*.png
+tools/crop_arrows.png
+tools/arrow_targets.png
+tools/bottom_row.png
+tools/fc_doc.xml
+agent-tools/
+
+# Optional large caches (keep models/exports tracked)
+*.log

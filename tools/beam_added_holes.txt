@@ -1,0 +1,3 @@
+Added M3 (d=3) holes on front beam from drawing measurement:
+  (±30.0, -34.5) mm, plate-center origin, bottom row only
+  Calibrated from 310×94 plate + 110/69 dims; measured ≈±30.15

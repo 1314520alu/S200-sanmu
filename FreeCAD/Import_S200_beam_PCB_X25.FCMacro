@@ -1,0 +1,60 @@
+# FreeCAD macro: import S200 front beam + PCB + X25 assembly (mesh)
+# 用法：解压 zip 后，在 FreeCAD 中 Macro → Macros → 执行本文件
+# FreeCAD 也可直接 File→Open 各个 .stl / .obj
+
+import FreeCAD as App
+import FreeCADGui as Gui
+import Mesh
+import os
+
+try:
+    DIR = os.path.dirname(os.path.abspath(__file__))
+except Exception:
+    DIR = os.getcwd()
+
+# X25 零件在自身坐标系 Z=0；装配时放在通心柱+PCB 顶面 = 3+3 = 6 mm
+X25_Z = 6.0
+
+PARTS = [
+    # (filename, object_name, rgb, placement_z)
+    ("part_beam.stl",       "beam_hollow",   (0.75, 0.77, 0.79), 0.0),
+    ("part_pcb.stl",        "pcb",           (0.12, 0.42, 0.28), 0.0),  # PCB export already at Z=0..3 (shifted)
+    ("part_hardware.stl",   "hardware",      (0.55, 0.45, 0.20), 0.0),
+    ("part_x25_body.stl",   "x25_body",      (0.14, 0.14, 0.16), X25_Z),
+    ("part_x25_core.stl",   "x25_core",      (0.55, 0.68, 0.82), X25_Z),
+    ("part_x25_mounts.stl", "x25_mounts",    (0.08, 0.08, 0.08), X25_Z),
+    ("part_x25_ports.stl",  "x25_ports",     (0.92, 0.92, 0.90), X25_Z),
+]
+
+# Note: part_pcb.stl was exported with PCB sitting on Z=0 (thickness 3).
+# In assembly, PCB sits on standoffs at Z=3..6. Shift PCB + hardware standoffs accordingly.
+# hardware includes standoffs at Z=0..3 and M3 heads at Z=6 — already assembly coords.
+# PCB-only export is at Z=0 — raise by standoff_h=3 to match assembly.
+
+PCB_Z_LIFT = 3.0  # put PCB onto standoffs
+
+doc = App.ActiveDocument or App.newDocument("S200_front_beam_PCB_X25")
+
+for fname, name, rgb, z in PARTS:
+    path = os.path.join(DIR, fname)
+    if not os.path.isfile(path):
+        App.Console.PrintError("Missing %s\n" % path)
+        continue
+    old = doc.getObject(name)
+    if old:
+        doc.removeObject(name)
+    obj = doc.addObject("Mesh::Feature", name)
+    obj.Mesh = Mesh.Mesh(path)
+    zz = z + (PCB_Z_LIFT if name == "pcb" else 0.0)
+    obj.Placement = App.Placement(App.Vector(0, 0, zz), App.Rotation())
+    if hasattr(obj, "ViewObject") and obj.ViewObject:
+        obj.ViewObject.ShapeColor = rgb
+        obj.ViewObject.Visibility = True
+
+doc.recompute()
+try:
+    Gui.SendMsgToActiveView("ViewFit")
+except Exception:
+    pass
+App.Console.PrintMessage("S200 assembly meshes loaded from %s\n" % DIR)
+App.Console.PrintMessage("Units mm. Origin = beam face centre. X25 raised by %.1f mm.\n" % X25_Z)

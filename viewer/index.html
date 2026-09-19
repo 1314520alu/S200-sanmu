@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Cache-Control" content="no-store" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>S200 预览 · 写实</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#f3f5f8;color:#222;font-family:system-ui,sans-serif}
+#c{display:block;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;left:12px;top:12px;z-index:2;background:rgba(255,255,255,.92);border:1px solid #d0d5dd;border-radius:10px;padding:10px 12px;max-width:360px;box-shadow:0 4px 18px rgba(0,0,0,.07)}
+#hud b{display:block;margin-bottom:4px}
+#hud span{font-size:12px;color:#667}
+#status{margin-top:6px;font-size:12px;color:#1a7a45}
+#status.err{color:#c0392b}
+#status.warn{color:#b8860b}
+#bar{position:fixed;right:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+button{border:1px solid #c5cad3;background:rgba(255,255,255,.92);color:#222;border-radius:999px;padding:8px 12px;cursor:pointer}
+button.on{border-color:#3b82f6;background:#e8f0fe}
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>S200 前梁 · PCB · X25</b>
+  <span>写实材质 · 金属高光 / PCB 哑光 · 柔和阴影</span>
+  <div id="status">加载中…</div>
+</div>
+<div id="bar">
+  <button id="btnReset">复位</button>
+  <button id="btnEdges" class="on">描边</button>
+  <button id="btnWire">线框</button>
+</div>
+<canvas id="c"></canvas>
+<script type="importmap">
+{"imports":{
+  "three":"./vendor/three/build/three.module.js",
+  "three/addons/":"./vendor/three/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+const statusEl = document.getElementById('status');
+const setStatus = (t, c='') => { statusEl.textContent = t; statusEl.className = c; };
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+// Clean studio backdrop — avoid muddy gray wash
+scene.background = new THREE.Color(0xf4f6f9);
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 5000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.zoomSpeed = 1.35;
+controls.minDistance = 5;
+
+// Studio lighting: bright key + cool fill + soft ambient → punchy, not gray
+scene.add(new THREE.AmbientLight(0xfff8f0, 0.42));
+const hemi = new THREE.HemisphereLight(0xffffff, 0xc8d0da, 0.55);
+scene.add(hemi);
+
+const key = new THREE.DirectionalLight(0xfff6ea, 1.35);
+key.position.set(180, 280, 160);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { near: 20, far: 900, left: -280, right: 280, top: 280, bottom: -280 });
+key.shadow.bias = -0.0002;
+key.shadow.normalBias = 0.6;
+key.shadow.radius = 6;
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0xd8e6ff, 0.55);
+fill.position.set(-260, 140, -80);
+scene.add(fill);
+
+const front = new THREE.DirectionalLight(0xffffff, 0.65);
+front.position.set(30, 90, 340);
+scene.add(front);
+
+const rim = new THREE.DirectionalLight(0xe8f0ff, 0.45);
+rim.position.set(-50, 120, -300);
+scene.add(rim);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(900, 900),
+  new THREE.ShadowMaterial({ opacity: 0.16 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Lightweight studio IBL so metal picks up reflections (no HDR file)
+{
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const env = new THREE.Scene();
+  env.add(new THREE.HemisphereLight(0xffffff, 0xb0b8c4, 1.1));
+  const a = new THREE.DirectionalLight(0xfff2e0, 2.2);
+  a.position.set(4, 8, 3);
+  env.add(a);
+  const b = new THREE.DirectionalLight(0xd0e4ff, 1.4);
+  b.position.set(-5, 3, -4);
+  env.add(b);
+  scene.environment = pmrem.fromScene(env, 0.04).texture;
+  pmrem.dispose();
+}
+
+let root = null, edgesRoot = null;
+let showEdges = true, wire = false;
+
+// Realistic part palette: aluminum beam, FR4 PCB, steel hardware
+const COLORS = {
+  beam_hollow: new THREE.Color(0.78, 0.81, 0.84),
+  pcb:         new THREE.Color(0.06, 0.38, 0.24),
+  hardware:    new THREE.Color(0.82, 0.84, 0.86),
+  x25_body:    new THREE.Color(0.14, 0.14, 0.16),
+  x25_core:    new THREE.Color(0.62, 0.68, 0.78),
+  x25_mounts:  new THREE.Color(0.09, 0.09, 0.10),
+  x25_ports:   new THREE.Color(0.96, 0.96, 0.94)
+};
+
+function pickColor(name) {
+  const n = (name || '').toLowerCase();
+  for (const k of Object.keys(COLORS)) if (n.includes(k)) return COLORS[k].clone();
+  return new THREE.Color(0.8, 0.8, 0.8);
+}
+
+function styleMesh(mesh) {
+  const src = mesh.material;
+  const name = ((Array.isArray(src) ? src[0]?.name : src?.name)
+    || mesh.name || mesh.parent?.name || '').toLowerCase();
+  const c = pickColor(name);
+  const isScrew = name.includes('hardware');
+  const isBeam = name.includes('beam');
+  const isPcb = name.includes('pcb');
+  const isDark = name.includes('x25_body') || name.includes('x25_mounts');
+  const isCore = name.includes('x25_core');
+  const isPort = name.includes('x25_ports');
+
+  let metalness = 0.08;
+  let roughness = 0.55;
+  if (isScrew) { metalness = 0.92; roughness = 0.22; }
+  else if (isBeam) { metalness = 0.72; roughness = 0.38; }
+  else if (isPcb) { metalness = 0.02; roughness = 0.72; }
+  else if (isDark) { metalness = 0.25; roughness = 0.48; }
+  else if (isCore) { metalness = 0.55; roughness = 0.35; }
+  else if (isPort) { metalness = 0.05; roughness = 0.65; }
+
+  mesh.material = new THREE.MeshStandardMaterial({
+    color: c,
+    metalness,
+    roughness,
+    envMapIntensity: isScrew || isBeam ? 1.15 : (isPcb ? 0.35 : 0.7),
+    side: THREE.FrontSide,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    wireframe: wire
+  });
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  if (mesh.geometry) mesh.geometry.computeVertexNormals();
+}
+
+function buildEdges(obj) {
+  if (edgesRoot) {
+    scene.remove(edgesRoot);
+    edgesRoot.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
+  }
+  edgesRoot = new THREE.Group();
+  edgesRoot.visible = showEdges;
+  // Soft edges — support form without CAD-ink look
+  const mat = new THREE.LineBasicMaterial({ color: 0x2a323c, transparent: true, opacity: 0.32 });
+  obj.updateMatrixWorld(true);
+  obj.traverse(m => {
+    if (!m.isMesh || !m.geometry) return;
+    const eg = new THREE.EdgesGeometry(m.geometry, 28);
+    const lines = new THREE.LineSegments(eg, mat.clone());
+    lines.matrixAutoUpdate = false;
+    lines.matrix.copy(m.matrixWorld);
+    edgesRoot.add(lines);
+  });
+  scene.add(edgesRoot);
+}
+
+function paint(obj) {
+  obj.traverse(m => { if (m.isMesh) styleMesh(m); });
+  if (showEdges) buildEdges(obj);
+  else if (edgesRoot) edgesRoot.visible = false;
+}
+
+function fit(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const max = Math.max(size.x, size.y, size.z);
+  ground.position.set(center.x, box.min.y - 0.4, center.z);
+  // Closer framing for detail
+  const dist = (max * 0.78) / (2 * Math.tan(camera.fov * Math.PI / 360));
+  controls.target.copy(center);
+  camera.position.set(center.x + dist * 0.9, center.y + dist * 0.38, center.z + dist * 0.95);
+  camera.near = Math.max(0.05, max / 400);
+  camera.far = max * 50;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+async function load() {
+  setStatus('加载高清模型…', 'warn');
+  try {
+    const mtl = await new MTLLoader().loadAsync('./models/assembly_hi.mtl?t=' + Date.now());
+    mtl.preload();
+    Object.values(mtl.materials || {}).forEach(mat => {
+      if (!mat) return;
+      mat.transparent = false; mat.opacity = 1; mat.side = THREE.FrontSide;
+    });
+    const loader = new OBJLoader();
+    loader.setMaterials(mtl);
+    const obj = await loader.loadAsync('./models/assembly_hi.obj?t=' + Date.now());
+    if (root) scene.remove(root);
+    root = obj;
+    paint(root);
+    scene.add(root);
+    fit(root);
+    setStatus('写实模式 · 柔和阴影 · ' + new Date().toLocaleTimeString());
+  } catch (e) {
+    console.error(e);
+    setStatus('失败: ' + e.message, 'err');
+  }
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+addEventListener('resize', resize); resize();
+
+document.getElementById('btnReset').onclick = () => root && fit(root);
+document.getElementById('btnEdges').onclick = (ev) => {
+  showEdges = !showEdges;
+  ev.currentTarget.classList.toggle('on', showEdges);
+  if (showEdges && root) buildEdges(root);
+  else if (edgesRoot) edgesRoot.visible = false;
+};
+document.getElementById('btnWire').onclick = (ev) => {
+  wire = !wire;
+  ev.currentTarget.classList.toggle('on', wire);
+  if (root) root.traverse(m => { if (m.isMesh && m.material) m.material.wireframe = wire; });
+};
+
+(function tick(){ controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); })();
+load();
+</script>
+</body>
+</html>
