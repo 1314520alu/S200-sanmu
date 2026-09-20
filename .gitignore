@@ -26,3 +26,8 @@ agent-tools/
 
 # Optional large caches (keep models/exports tracked)
 *.log
+
+# LCEDA probe dumps / local MCP cache
+lceda_project/analysis/
+mcp/**/__pycache__/
+mcp/**/_smoke_stdio.py
