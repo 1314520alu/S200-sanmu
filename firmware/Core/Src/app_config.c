@@ -1,5 +1,7 @@
 #include "app_config.h"
 
+#include "app_ports.h"
+
 #include <string.h>
 
 #ifndef HUB_CONFIG_USE_FLASH
@@ -70,6 +72,7 @@ bool hub_config_set_enable(const uint8_t enable[HUB_PORT_COUNT], bool force_fc_o
 
     memcpy(s_config.enable, next_enable, sizeof(s_config.enable));
     s_config.magic = HUB_CONFIG_MAGIC;
+    port_apply_enable_state();
 
 #if HUB_CONFIG_USE_FLASH
     return hub_config_save_flash(&s_config);
