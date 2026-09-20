@@ -6,6 +6,7 @@
 - **Transceivers:** 8× ADM3055E (isolated CAN)
 - **Input power:** 9–36 V DC → 5 V → 3.3 V
 - **BOM:** see [bom_draft.md](bom_draft.md)
+- **原理图绘制资料（对照画板）：** [schematic-guide.md](schematic-guide.md)
 
 ## Schematic checklist
 
