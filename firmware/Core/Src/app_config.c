@@ -5,13 +5,29 @@
 #include <string.h>
 
 #ifndef HUB_CONFIG_USE_FLASH
+/* TODO(production): enable and implement Flash persistence before release. */
 #define HUB_CONFIG_USE_FLASH 0
+#endif
+
+#ifndef HUB_CONFIG_ALLOW
+#define HUB_CONFIG_ALLOW 0
 #endif
 
 #define HUB_CONFIG_MAGIC 0x48554221U /* "HUB!" */
 
+#if defined(__GNUC__) || defined(__clang__)
+#define APP_CONFIG_WEAK __attribute__((weak))
+#else
+#define APP_CONFIG_WEAK
+#endif
+
 static hub_config_t s_config;
 static bool s_locked;
+
+APP_CONFIG_WEAK bool hub_config_hw_config_allowed(void)
+{
+    return HUB_CONFIG_ALLOW != 0;
+}
 
 static void hub_config_defaults(hub_config_t *cfg)
 {
@@ -40,7 +56,8 @@ static bool hub_config_save_flash(const hub_config_t *cfg)
 
 void hub_config_init(void)
 {
-    s_locked = false;
+    /* Production stays locked unless the board's config-allow input is asserted. */
+    s_locked = !hub_config_hw_config_allowed();
 
 #if HUB_CONFIG_USE_FLASH
     if (!hub_config_load_flash(&s_config)) {
@@ -59,12 +76,17 @@ const hub_config_t *hub_config_get(void)
 
 bool hub_config_set_enable(const uint8_t enable[HUB_PORT_COUNT], bool force_fc_on)
 {
-    if (s_locked) {
+    if (s_locked || (enable == NULL)) {
         return false;
     }
 
     uint8_t next_enable[HUB_PORT_COUNT];
-    memcpy(next_enable, enable, sizeof(next_enable));
+    for (uint8_t i = 0U; i < HUB_PORT_COUNT; ++i) {
+        if (enable[i] > 1U) {
+            return false;
+        }
+        next_enable[i] = enable[i];
+    }
 
     if (force_fc_on || next_enable[0] == 0U) {
         next_enable[0] = 1U;

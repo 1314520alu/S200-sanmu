@@ -16,5 +16,7 @@ const hub_config_t *hub_config_get(void);
 bool hub_config_set_enable(const uint8_t enable[HUB_PORT_COUNT], bool force_fc_on);
 bool hub_config_is_locked(void);
 void hub_config_set_locked(bool locked);
+/* Board adapter may override this to sample an asserted config-allow GPIO. */
+bool hub_config_hw_config_allowed(void);
 
 #endif /* APP_CONFIG_H */

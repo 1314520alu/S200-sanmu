@@ -11,11 +11,20 @@ typedef struct {
     bool ide;
 } port_frame_t;
 
+typedef struct {
+    uint32_t tx;
+    uint32_t rx;
+    uint32_t err;
+    bool fault;
+} port_status_t;
+
 bool port_init_all(uint32_t bitrate);
 bool port_send(uint8_t port, uint32_t id, bool ide, const uint8_t *data, uint8_t len);
 bool port_poll_rx(uint8_t port, uint32_t *id, bool *ide,
                   uint8_t *data, uint8_t *len);
 void port_apply_enable_state(void);
+void port_monitor_faults(void);
+bool port_get_status(uint8_t port, port_status_t *status);
 
 /*
  * CubeMX board hooks. app_ports.c contains weak, host-compilable defaults;

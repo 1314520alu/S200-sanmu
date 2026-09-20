@@ -5,13 +5,13 @@ Python tools for configuring the DroneCAN 8-port isolated CAN hub over a JSON Li
 ## Setup
 
 ```bash
-pip install -r requirements.txt
+pip install -r tools/hub_config_gui/requirements.txt
 ```
 
 ## Run GUI
 
 ```bash
-python hub_config_gui/main.py
+python tools/hub_config_gui/main.py
 ```
 
 Or from the `tools/hub_config_gui` directory:

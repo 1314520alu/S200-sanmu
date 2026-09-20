@@ -33,16 +33,21 @@
 #define MCP2518_FIFO_TXNFIF    (1UL << 0)
 #define MCP2518_FIFO_RXNEMPTYIF (1UL << 0)
 
-#define MCP2518_OBJ_IDE        (1UL << 29)
-#define MCP2518_OBJ_RTR        (1UL << 30)
+/*
+ * MCP2518FD message object word1 (CiTXQOBJ/CiFIFOnOBJ):
+ * DLC is bits 3:0, IDE is bit 4, and RTR is bit 5. Word0 contains only
+ * SID[10:0] and EID[17:0] in bits 28:0.
+ */
+#define MCP2518_OBJ_DLC_MASK   0x0FUL
+#define MCP2518_OBJ_IDE        (1UL << 4)
+#define MCP2518_OBJ_RTR        (1UL << 5)
 
 #define MCP2518_CITREC_REC_MASK  0xFFUL
 #define MCP2518_CITREC_TEC_SHIFT 8U
 #define MCP2518_CITREC_TEC_MASK  0xFF00UL
-#define MCP2518_CITREC_TXBP      (1UL << 20) /* CiTREC bit 20: TX bus Passive */
-#define MCP2518_CITREC_RXBP      (1UL << 21) /* CiTREC bit 21: RX bus Passive */
-#define MCP2518_CITREC_TXBO      (1UL << 22) /* CiTREC bit 22: TX bus Off */
-#define MCP2518_CITREC_RXBO      (1UL << 23) /* CiTREC bit 23: RX bus Off */
+#define MCP2518_CITREC_RXBP      (1UL << 19) /* CiTREC bit 19: RX bus passive */
+#define MCP2518_CITREC_TXBP      (1UL << 20) /* CiTREC bit 20: TX bus passive */
+#define MCP2518_CITREC_TXBO      (1UL << 21) /* CiTREC bit 21: TX bus off */
 #define MCP2518_ERROR_PASSIVE_THRESHOLD 128U
 
 #define MCP2518_DEFAULT_OSC_HZ 40000000UL
@@ -216,16 +221,16 @@ static uint32_t encode_id(const mcp2518_frame_t *frame)
 {
     if (frame->ide) {
         return ((frame->id >> 18) & 0x7FFUL) |
-               ((frame->id & 0x3FFFFUL) << 11) |
-               MCP2518_OBJ_IDE;
+               ((frame->id & 0x3FFFFUL) << 11);
     }
     return frame->id & 0x7FFUL;
 }
 
-static void decode_id(uint32_t object_id, mcp2518_frame_t *frame)
+static void decode_id(uint32_t object_id, uint32_t object_flags,
+                      mcp2518_frame_t *frame)
 {
-    frame->ide = (object_id & MCP2518_OBJ_IDE) != 0U;
-    frame->rtr = (object_id & MCP2518_OBJ_RTR) != 0U;
+    frame->ide = (object_flags & MCP2518_OBJ_IDE) != 0U;
+    frame->rtr = (object_flags & MCP2518_OBJ_RTR) != 0U;
     if (frame->ide) {
         frame->id = ((object_id & 0x7FFUL) << 18) |
                     ((object_id >> 11) & 0x3FFFFUL);
@@ -320,12 +325,16 @@ bool mcp2518_send(mcp2518_t *dev, const mcp2518_frame_t *frame)
         return false;
     }
 
-    uint32_t object_id = encode_id(frame);
+    const uint32_t object_id = encode_id(frame);
+    uint32_t object_flags = frame->len & MCP2518_OBJ_DLC_MASK;
+    if (frame->ide) {
+        object_flags |= MCP2518_OBJ_IDE;
+    }
     if (frame->rtr) {
-        object_id |= MCP2518_OBJ_RTR;
+        object_flags |= MCP2518_OBJ_RTR;
     }
     put_u32_le(&object[0], object_id);
-    put_u32_le(&object[4], frame->len & 0x0FU);
+    put_u32_le(&object[4], object_flags);
     if (!frame->rtr && (frame->len != 0U)) {
         memcpy(&object[8], frame->data, frame->len);
     }
@@ -352,8 +361,9 @@ bool mcp2518_receive(mcp2518_t *dev, mcp2518_frame_t *frame)
         return false;
     }
 
-    decode_id(get_u32_le(&object[0]), frame);
-    frame->len = (uint8_t)(get_u32_le(&object[4]) & 0x0FU);
+    const uint32_t object_flags = get_u32_le(&object[4]);
+    decode_id(get_u32_le(&object[0]), object_flags, frame);
+    frame->len = (uint8_t)(object_flags & MCP2518_OBJ_DLC_MASK);
     if (frame->len > MCP2518_CLASSIC_MAX_DLEN) {
         frame->len = MCP2518_CLASSIC_MAX_DLEN;
     }
@@ -375,8 +385,7 @@ void mcp2518_decode_citrec(uint32_t citrec, mcp2518_error_status_t *status)
         (status->tx_errors >= MCP2518_ERROR_PASSIVE_THRESHOLD) ||
         (status->rx_errors >= MCP2518_ERROR_PASSIVE_THRESHOLD) ||
         ((citrec & (MCP2518_CITREC_TXBP | MCP2518_CITREC_RXBP)) != 0U);
-    status->bus_off =
-        ((citrec & (MCP2518_CITREC_TXBO | MCP2518_CITREC_RXBO)) != 0U);
+    status->bus_off = (citrec & MCP2518_CITREC_TXBO) != 0U;
 }
 
 bool mcp2518_get_error_status(mcp2518_t *dev,

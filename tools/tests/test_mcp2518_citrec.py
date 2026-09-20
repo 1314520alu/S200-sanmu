@@ -14,10 +14,10 @@ BUILD = Path(__file__).parent / "_build_mcp2518_citrec"
 MCP2518_CITREC_REC_MASK = 0xFF
 MCP2518_CITREC_TEC_SHIFT = 8
 MCP2518_CITREC_TEC_MASK = 0xFF00
+# Independent MCP2518FD datasheet fixtures: RXBP=19, TXBP=20, TXBO=21.
+MCP2518_CITREC_RXBP = 1 << 19
 MCP2518_CITREC_TXBP = 1 << 20
-MCP2518_CITREC_RXBP = 1 << 21
-MCP2518_CITREC_TXBO = 1 << 22
-MCP2518_CITREC_RXBO = 1 << 23
+MCP2518_CITREC_TXBO = 1 << 21
 MCP2518_ERROR_PASSIVE_THRESHOLD = 128
 
 
@@ -29,7 +29,7 @@ def decode_citrec(citrec: int) -> tuple[int, int, bool, bool]:
         or rx_errors >= MCP2518_ERROR_PASSIVE_THRESHOLD
         or (citrec & (MCP2518_CITREC_TXBP | MCP2518_CITREC_RXBP)) != 0
     )
-    bus_off = (citrec & (MCP2518_CITREC_TXBO | MCP2518_CITREC_RXBO)) != 0
+    bus_off = (citrec & MCP2518_CITREC_TXBO) != 0
     return tx_errors, rx_errors, error_passive, bus_off
 
 
@@ -58,9 +58,16 @@ def test_txbp_sets_error_passive_with_zero_counters():
     assert error_passive is True
 
 
+def test_rxbp_datasheet_bit_sets_error_passive():
+    _, _, error_passive, _ = decode_citrec(1 << 19)
+    assert error_passive is True
+
+
 def test_bus_off_from_txbo_bit():
     _, _, _, bus_off = decode_citrec(MCP2518_CITREC_TXBO)
     assert bus_off is True
+    _, _, _, reserved_bit_bus_off = decode_citrec(1 << 23)
+    assert reserved_bit_bus_off is False
 
 
 def _compile_host_test() -> Path | None:

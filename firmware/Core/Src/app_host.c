@@ -1,8 +1,10 @@
 #include "app_host.h"
 
 #include "app_config.h"
+#include "app_ports.h"
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,6 +19,7 @@
 
 static char s_line_buf[APP_HOST_LINE_MAX + 1U];
 static size_t s_line_len;
+static bool s_discard_until_newline;
 
 APP_HOST_WEAK void app_host_tx(const char *line)
 {
@@ -111,7 +114,6 @@ static bool json_parse_enable(const char *json, uint8_t enable[HUB_PORT_COUNT])
 {
     const char *key = strstr(json, "\"enable\"");
     const char *cursor;
-    int values = 0;
 
     if (key == NULL) {
         return false;
@@ -123,24 +125,30 @@ static bool json_parse_enable(const char *json, uint8_t enable[HUB_PORT_COUNT])
     }
     ++cursor;
 
-    while (*cursor != '\0' && (*cursor != ']')) {
-        while (*cursor != '\0' && (isspace((unsigned char)*cursor) || (*cursor == ','))) {
+    for (uint8_t index = 0U; index < HUB_PORT_COUNT; ++index) {
+        while (isspace((unsigned char)*cursor)) {
             ++cursor;
-        }
-        if (*cursor == ']') {
-            break;
         }
         if ((*cursor != '0') && (*cursor != '1')) {
             return false;
         }
-        if (values >= HUB_PORT_COUNT) {
-            return false;
-        }
-        enable[values++] = (uint8_t)(*cursor - '0');
+        enable[index] = (uint8_t)(*cursor - '0');
         ++cursor;
+        while (isspace((unsigned char)*cursor)) {
+            ++cursor;
+        }
+        if (index < (HUB_PORT_COUNT - 1U)) {
+            if (*cursor != ',') {
+                return false;
+            }
+            ++cursor;
+        }
     }
 
-    return values == HUB_PORT_COUNT;
+    while (isspace((unsigned char)*cursor)) {
+        ++cursor;
+    }
+    return *cursor == ']';
 }
 
 static size_t append_enable(char *buf, size_t cap, size_t pos,
@@ -268,9 +276,17 @@ static void respond_get_status(void)
     pos = (size_t)written;
 
     for (port = 0U; port < HUB_PORT_COUNT; ++port) {
+        port_status_t status;
+        if (!port_get_status(port, &status)) {
+            app_host_send_err("bad_status");
+            return;
+        }
         written = snprintf(buf + pos, sizeof(buf) - pos,
-                           "%s{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false}",
-                           (port == 0U) ? "" : ",");
+                           "%s{\"tx\":%" PRIu32 ",\"rx\":%" PRIu32
+                           ",\"err\":%" PRIu32 ",\"fault\":%s}",
+                           (port == 0U) ? "" : ",",
+                           status.tx, status.rx, status.err,
+                           status.fault ? "true" : "false");
         if ((written < 0) || ((size_t)written >= (sizeof(buf) - pos))) {
             app_host_send_err("bad_json");
             return;
@@ -319,10 +335,18 @@ static void app_host_handle_line(char *line)
 void app_host_init(void)
 {
     s_line_len = 0U;
+    s_discard_until_newline = false;
 }
 
 void app_host_on_rx_byte(uint8_t byte)
 {
+    if (s_discard_until_newline) {
+        if (byte == '\n') {
+            s_discard_until_newline = false;
+        }
+        return;
+    }
+
     if (byte == '\r') {
         return;
     }
@@ -336,6 +360,7 @@ void app_host_on_rx_byte(uint8_t byte)
 
     if (s_line_len >= APP_HOST_LINE_MAX) {
         s_line_len = 0U;
+        s_discard_until_newline = true;
         app_host_send_err("bad_json");
         return;
     }

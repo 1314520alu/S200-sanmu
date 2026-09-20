@@ -21,6 +21,21 @@
 #endif
 
 static mcp2518_t s_mcp[MCP_PORT_COUNT];
+static port_status_t s_status[HUB_PORT_COUNT];
+static uint16_t s_hw_error_count[HUB_PORT_COUNT];
+
+static void increment_counter(uint32_t *counter)
+{
+    if (*counter != UINT32_MAX) {
+        ++(*counter);
+    }
+}
+
+static void latch_fault(uint8_t port)
+{
+    s_status[port].fault = true;
+    (void)adm3055_set_silent(port, true);
+}
 
 APP_PORTS_WEAK bool app_ports_hw_fdcan_init(uint8_t instance,
                                             uint32_t bitrate)
@@ -126,6 +141,8 @@ bool port_init_all(uint32_t bitrate)
     }
 
     adm3055_bind(adm_silent_write, adm_standby_write, NULL);
+    memset(s_status, 0, sizeof(s_status));
+    memset(s_hw_error_count, 0, sizeof(s_hw_error_count));
     for (uint8_t instance = 0U; instance < FDCAN_PORT_COUNT; ++instance) {
         if (!app_ports_hw_fdcan_init(instance, bitrate)) {
             success = false;
@@ -153,6 +170,10 @@ bool port_send(uint8_t port, uint32_t id, bool ide, const uint8_t *data, uint8_t
         }
         return false;
     }
+    if (s_status[port].fault) {
+        (void)adm3055_set_silent(port, true);
+        return false;
+    }
 
     (void)adm3055_set_standby(port, false);
     (void)adm3055_set_silent(port, false);
@@ -166,7 +187,12 @@ bool port_send(uint8_t port, uint32_t id, bool ide, const uint8_t *data, uint8_t
         if (len != 0U) {
             memcpy(frame.data, data, len);
         }
-        return app_ports_hw_fdcan_send(port, &frame);
+        if (app_ports_hw_fdcan_send(port, &frame)) {
+            increment_counter(&s_status[port].tx);
+            return true;
+        }
+        increment_counter(&s_status[port].err);
+        return false;
     }
 
     mcp2518_frame_t frame = {
@@ -178,7 +204,12 @@ bool port_send(uint8_t port, uint32_t id, bool ide, const uint8_t *data, uint8_t
     if (len != 0U) {
         memcpy(frame.data, data, len);
     }
-    return mcp2518_send(&s_mcp[port - MCP_PORT_FIRST], &frame);
+    if (mcp2518_send(&s_mcp[port - MCP_PORT_FIRST], &frame)) {
+        increment_counter(&s_status[port].tx);
+        return true;
+    }
+    increment_counter(&s_status[port].err);
+    return false;
 }
 
 bool port_poll_rx(uint8_t port, uint32_t *id, bool *ide,
@@ -211,11 +242,46 @@ bool port_poll_rx(uint8_t port, uint32_t *id, bool *ide,
     }
 
     if (frame.len > sizeof(frame.data)) {
+        increment_counter(&s_status[port].err);
         return false;
     }
     *id = frame.id;
     *ide = frame.ide;
     *len = frame.len;
     memcpy(data, frame.data, frame.len);
+    increment_counter(&s_status[port].rx);
+    return true;
+}
+
+void port_monitor_faults(void)
+{
+    for (uint8_t device = 0U; device < MCP_PORT_COUNT; ++device) {
+        const uint8_t port = (uint8_t)(MCP_PORT_FIRST + device);
+        mcp2518_error_status_t error_status;
+
+        if (!mcp2518_get_error_status(&s_mcp[device], &error_status)) {
+            increment_counter(&s_status[port].err);
+            continue;
+        }
+
+        s_hw_error_count[port] =
+            (uint16_t)error_status.tx_errors + error_status.rx_errors;
+        if (error_status.error_passive || error_status.bus_off) {
+            latch_fault(port);
+        }
+    }
+}
+
+bool port_get_status(uint8_t port, port_status_t *status)
+{
+    if ((port >= HUB_PORT_COUNT) || (status == NULL)) {
+        return false;
+    }
+    *status = s_status[port];
+    if (status->err <= (UINT32_MAX - s_hw_error_count[port])) {
+        status->err += s_hw_error_count[port];
+    } else {
+        status->err = UINT32_MAX;
+    }
     return true;
 }
