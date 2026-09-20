@@ -42,18 +42,44 @@ def test_app_host_host_binary():
     assert "app_host_host: ok" in result.stdout
 
 
-def test_protocol_field_names():
-    """Responses use the same keys as protocol.py / GUI expectations."""
-    ping = json.loads('{"ok":true,"cmd":"ping"}')
+def _run_firmware_host() -> subprocess.CompletedProcess[str]:
+    exe = _compile_host_test()
+    if exe is None:
+        raise RuntimeError("gcc not available")
+    return subprocess.run([str(exe)], check=True, capture_output=True, text=True)
+
+
+def _parse_firmware_samples(stdout: str) -> dict[str, dict]:
+    samples: dict[str, dict] = {}
+    for line in stdout.splitlines():
+        if not line.startswith("SAMPLE "):
+            continue
+        _, label, payload = line.split(" ", 2)
+        samples[label] = json.loads(payload.strip())
+    return samples
+
+
+def test_firmware_protocol_field_names():
+    """Protocol keys come from app_host.c via the host compile/run harness."""
+    try:
+        result = _run_firmware_host()
+    except RuntimeError:
+        return
+
+    assert "app_host_host: ok" in result.stdout
+    samples = _parse_firmware_samples(result.stdout)
+
+    ping = samples["ping"]
     assert ping["ok"] is True and ping["cmd"] == "ping"
 
-    cfg = json.loads(
-        '{"ok":true,"cmd":"get_config","enable":[1,1,1,1,1,1,1,0],"lock":false}'
-    )
+    cfg = samples["get_config"]
     assert cfg["cmd"] == "get_config" and len(cfg["enable"]) == 8
 
-    locked = json.loads('{"ok":false,"err":"locked"}')
-    assert locked["err"] == "locked"
+    status = samples["get_status"]
+    assert status["ok"] is True and status["cmd"] == "get_status"
+    assert len(status["ports"]) == 8
+    for port in status["ports"]:
+        assert set(port.keys()) == {"tx", "rx", "err", "fault"}
 
-    bad = json.loads('{"ok":false,"err":"bad_json"}')
-    assert bad["err"] == "bad_json"
+    assert samples["locked"]["err"] == "locked"
+    assert samples["bad_json"]["err"] == "bad_json"

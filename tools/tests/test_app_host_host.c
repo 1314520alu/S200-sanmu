@@ -66,6 +66,51 @@ static void test_bad_json(void)
     expect_str("bad_json", s_last_tx, "{\"ok\":false,\"err\":\"bad_json\"}\n");
 }
 
+static void test_get_status(void)
+{
+    static const char *expected =
+        "{\"ok\":true,\"cmd\":\"get_status\",\"ports\":["
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false},"
+        "{\"tx\":0,\"rx\":0,\"err\":0,\"fault\":false}"
+        "]}\n";
+
+    feed_line("{\"cmd\":\"get_status\"}");
+    expect_str("get_status", s_last_tx, expected);
+}
+
+static void test_line_overflow(void)
+{
+    int i;
+
+    app_host_init();
+    for (i = 0; i < 257; ++i) {
+        app_host_on_rx_byte((uint8_t)'x');
+    }
+    expect_str("overflow257", s_last_tx, "{\"ok\":false,\"err\":\"bad_json\"}\n");
+}
+
+static void emit_samples(void)
+{
+    feed_line("{\"cmd\":\"ping\"}");
+    printf("SAMPLE ping %s", s_last_tx);
+    feed_line("{\"cmd\":\"get_config\"}");
+    printf("SAMPLE get_config %s", s_last_tx);
+    feed_line("{\"cmd\":\"get_status\"}");
+    printf("SAMPLE get_status %s", s_last_tx);
+    hub_config_set_locked(true);
+    feed_line("{\"cmd\":\"set_config\",\"enable\":[1,1,1,1,1,1,1,0]}");
+    printf("SAMPLE locked %s", s_last_tx);
+    hub_config_set_locked(false);
+    feed_line("{not json}");
+    printf("SAMPLE bad_json %s", s_last_tx);
+}
+
 int main(void)
 {
     hub_config_init();
@@ -76,12 +121,15 @@ int main(void)
     test_set_config();
     test_locked();
     test_bad_json();
+    test_get_status();
+    test_line_overflow();
 
     if (s_failures != 0) {
         fprintf(stderr, "%d assertion(s) failed\n", s_failures);
         return EXIT_FAILURE;
     }
 
+    emit_samples();
     puts("app_host_host: ok");
     return EXIT_SUCCESS;
 }
