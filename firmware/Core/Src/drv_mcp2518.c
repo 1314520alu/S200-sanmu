@@ -36,8 +36,14 @@
 #define MCP2518_OBJ_IDE        (1UL << 29)
 #define MCP2518_OBJ_RTR        (1UL << 30)
 
-#define MCP2518_TREC_EPASS     (1UL << 20)
-#define MCP2518_TREC_TXBO      (1UL << 21)
+#define MCP2518_CITREC_REC_MASK  0xFFUL
+#define MCP2518_CITREC_TEC_SHIFT 8U
+#define MCP2518_CITREC_TEC_MASK  0xFF00UL
+#define MCP2518_CITREC_TXBP      (1UL << 20) /* CiTREC bit 20: TX bus Passive */
+#define MCP2518_CITREC_RXBP      (1UL << 21) /* CiTREC bit 21: RX bus Passive */
+#define MCP2518_CITREC_TXBO      (1UL << 22) /* CiTREC bit 22: TX bus Off */
+#define MCP2518_CITREC_RXBO      (1UL << 23) /* CiTREC bit 23: RX bus Off */
+#define MCP2518_ERROR_PASSIVE_THRESHOLD 128U
 
 #define MCP2518_DEFAULT_OSC_HZ 40000000UL
 #define MCP2518_SPI_BUFFER_MAX 80U
@@ -355,17 +361,32 @@ bool mcp2518_receive(mcp2518_t *dev, mcp2518_frame_t *frame)
     return fifo_command(dev, dev->rx_fifo, MCP2518_FIFO_UINC);
 }
 
+void mcp2518_decode_citrec(uint32_t citrec, mcp2518_error_status_t *status)
+{
+    if (status == NULL) {
+        return;
+    }
+
+    /* CiTREC [7:0]=REC, [15:8]=TEC per MCP2518FD datasheet. */
+    status->rx_errors = (uint8_t)(citrec & MCP2518_CITREC_REC_MASK);
+    status->tx_errors =
+        (uint8_t)((citrec & MCP2518_CITREC_TEC_MASK) >> MCP2518_CITREC_TEC_SHIFT);
+    status->error_passive =
+        (status->tx_errors >= MCP2518_ERROR_PASSIVE_THRESHOLD) ||
+        (status->rx_errors >= MCP2518_ERROR_PASSIVE_THRESHOLD) ||
+        ((citrec & (MCP2518_CITREC_TXBP | MCP2518_CITREC_RXBP)) != 0U);
+    status->bus_off =
+        ((citrec & (MCP2518_CITREC_TXBO | MCP2518_CITREC_RXBO)) != 0U);
+}
+
 bool mcp2518_get_error_status(mcp2518_t *dev,
                               mcp2518_error_status_t *status)
 {
-    uint32_t trec;
+    uint32_t citrec;
     if ((dev == NULL) || (status == NULL) ||
-        !read_reg(dev, MCP2518_REG_CITREC, &trec)) {
+        !read_reg(dev, MCP2518_REG_CITREC, &citrec)) {
         return false;
     }
-    status->tx_errors = (uint8_t)trec;
-    status->rx_errors = (uint8_t)(trec >> 8);
-    status->error_passive = (trec & MCP2518_TREC_EPASS) != 0U;
-    status->bus_off = (trec & MCP2518_TREC_TXBO) != 0U;
+    mcp2518_decode_citrec(citrec, status);
     return true;
 }

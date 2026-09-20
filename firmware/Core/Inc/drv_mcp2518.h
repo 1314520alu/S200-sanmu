@@ -50,6 +50,7 @@ bool mcp2518_reset(mcp2518_t *dev);
 bool mcp2518_init_1mbps_classic(mcp2518_t *dev);
 bool mcp2518_send(mcp2518_t *dev, const mcp2518_frame_t *frame);
 bool mcp2518_receive(mcp2518_t *dev, mcp2518_frame_t *frame);
+void mcp2518_decode_citrec(uint32_t citrec, mcp2518_error_status_t *status);
 bool mcp2518_get_error_status(mcp2518_t *dev,
                               mcp2518_error_status_t *status);
 
