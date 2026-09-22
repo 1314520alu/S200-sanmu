@@ -1,41 +1,33 @@
-# s200-lceda MCP
+# s200-lceda MCP v1.3
 
-S200 / 立创任务级 MCP：一次工具调用完成状态诊断、本地修复或云端库同步。
+S200 / 立创任务级 MCP：一次工具调用完成一件工程事。写操作直接落盘/写云端。
+
+## 优先用法
+
+1. `diagnose` — Hub + 登录 + X25 结论（首选）  
+2. 本地/云端修复 — `x25_*` / `cloud_*` / `x25_pipeline`  
+3. H1 飞控排针网络 — `h1_fc_nets`（一次画完 M1–M16 / SERVO_VCC / FC_GND）  
+4. 画布其它 — `eda_snapshot` / `eda_invoke`（已知 `eda.*`，跳过官方多轮透传）  
+5. 选型放置 — 仍用官方 `jlceda`
 
 ## 工具
 
-### 本地工程
-
 | 工具 | 作用 |
 |------|------|
-| `project_status` | X25 绑定/焊盘/能否转 PCB |
-| `x25_pad_check` | 安装孔几何核对 |
-| `x25_fix_pads` | 注入 4 焊盘 → `lceda_project/S200飞机_fixed/` |
-| `x25_bind_footprint` | 原理图 Footprint 绑定 |
+| `diagnose` | Hub/Bridge + cookie + 工程结论 |
+| `project_status` / `x25_pad_check` / `x25_fix_pads` / `x25_bind_footprint` | 本地 epru |
 | `library_verify` | analysis + epru 一致性 |
-| `hub_bridge_status` | 官方 Hub:8900 / Bridge 诊断 |
+| `hub_bridge_status` | Hub:8765 / HTTP:7900 |
+| `eda_snapshot` | 精简画布上下文（需 Bridge） |
+| `eda_invoke` | 直调 `eda.*`（`args_json` 为 JSON 数组） |
+| `h1_fc_nets` | H1→M1-M16 / SERVO_VCC / FC_GND 一键画网 |
+| `cloud_*` / `x25_pipeline` | 云端库 + 一键流水线 |
 
-### 云端库（需已登录立创专业版）
+返回均为**紧凑 JSON**，带 `ms`。
 
-| 工具 | 作用 |
-|------|------|
-| `cloud_auth_check` | 检查 web.db cookie |
-| `cloud_fp_status` | 云端封装焊盘数 |
-| `cloud_device_status` | Device 属性 |
-| `cloud_upload_fp` | 上传 fixed 封装到个人库 |
-| `cloud_bind_device` | Device 绑 Footprint + Convert to PCB |
-| `x25_pipeline` | 本地修复 + 可选云端同步一键跑通 |
-
-写策略：**直接写入**（无 confirm 开关）。
-
-## 本地运行
-
-```bat
-"C:\Users\alu\AppData\Local\Programs\Python\Python311\python.exe" server.py
-```
-
-依赖：`mcp>=2.2`（本机 Python 3.11）。
+Bridge：`ws://127.0.0.1:8765/bridge/ws`  
+HTTP MCP：`http://127.0.0.1:7900/mcp`
 
 ## Cursor
 
-`~/.cursor/mcp.json` 中 `s200-lceda` 条目。改代码后若工具列表未刷新，在 Settings → MCP 里 Restart 该服务。
+`~/.cursor/mcp.json` → `s200-lceda`。改代码后 Settings → MCP → Restart。

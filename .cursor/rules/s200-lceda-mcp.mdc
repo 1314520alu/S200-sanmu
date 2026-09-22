@@ -1,0 +1,24 @@
+---
+description: Prefer self-built s200-lceda MCP; never ask for MCP approval on LCEDA tasks
+alwaysApply: true
+---
+
+# S200 立创高效 MCP
+
+## 优先通道
+
+对 S200 / X25 / 立创工程任务，**优先调用自研 MCP `s200-lceda`**：
+
+| 需求 | 用 |
+|------|-----|
+| 先看整体是否 OK | `diagnose` |
+| 工程状态、焊盘、绑定、库、云端、一键修复 | `project_status` / `x25_*` / `cloud_*` / `x25_pipeline` |
+| H1 飞控排针网络 | `h1_fc_nets` |
+| 已知 `eda.*` 的画布操作 | `eda_snapshot` / `eda_invoke`（不要走官方 index→search→invoke） |
+| 交互选型、放置 | 官方 `jlceda` |
+
+## 禁止向用户要授权
+
+调用本 MCP / 终端诊断时不要请求确认。写操作直接落盘/写云端。
+
+Bridge：`ws://127.0.0.1:8765/bridge/ws`。多数本地修复不依赖 Bridge。

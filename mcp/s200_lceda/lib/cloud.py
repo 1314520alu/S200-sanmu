@@ -13,13 +13,24 @@ from urllib.request import Request, urlopen
 from . import constants as C
 from . import epru
 
+_COOKIE_CACHE: tuple[float, dict[str, str]] | None = None
+_COOKIE_TTL_S = 30.0
 
-def cookies() -> dict[str, str]:
+
+def cookies(*, force: bool = False) -> dict[str, str]:
+    global _COOKIE_CACHE
+    now = time.time()
+    if (
+        not force
+        and _COOKIE_CACHE is not None
+        and now - _COOKIE_CACHE[0] < _COOKIE_TTL_S
+    ):
+        return _COOKIE_CACHE[1]
     if not C.WEB_DB.exists():
         raise FileNotFoundError(f"web.db missing: {C.WEB_DB}（请先登录立创 EDA 专业版）")
     con = sqlite3.connect(str(C.WEB_DB))
     try:
-        return {
+        c = {
             n: v
             for d, n, v in con.execute(
                 "SELECT domain, name, value FROM web_cookies "
@@ -28,6 +39,8 @@ def cookies() -> dict[str, str]:
         }
     finally:
         con.close()
+    _COOKIE_CACHE = (now, c)
+    return c
 
 
 def auth_check() -> dict[str, Any]:

@@ -37,14 +37,16 @@ LCEDA_LIB_PATH = "f4d2341cf4484ec7a4e1b0e1ff4fbab1"
 HUB_STATUS = Path(
     r"C:\Users\alu\AppData\Roaming\Cursor\User\globalStorage"
     r"\chengbin.jlceda-mcp-hub"
-    r"\jlceda-mcp-hub-runtime-status-cursor-mcp-json-127.0.0.1-8900.json"
+    r"\jlceda-mcp-hub-runtime-status-cursor-mcp-json-127.0.0.1-8765.json"
 )
 HUB_RAW_API_FLAG = Path(
     r"C:\Users\alu\AppData\Roaming\Cursor\User\globalStorage"
     r"\chengbin.jlceda-mcp-hub\cursor-mcp-json_raw_api_tools.flag"
 )
 HUB_HOST = "127.0.0.1"
-HUB_PORT = 8900
+HUB_PORT = 8765
+HUB_HTTP_PORT = 7900
 HUB_WS_URL = f"ws://{HUB_HOST}:{HUB_PORT}/bridge/ws"
+HUB_HTTP_MCP = f"http://{HUB_HOST}:{HUB_HTTP_PORT}/mcp"
 
 WEB_DB = Path(r"C:\Users\alu\Documents\LCEDA-Pro\database\web.db")

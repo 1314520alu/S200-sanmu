@@ -31,3 +31,8 @@ agent-tools/
 lceda_project/analysis/
 mcp/**/__pycache__/
 mcp/**/_smoke_stdio.py
+
+# MCP local probe dumps / bridge scratch
+mcp/**/_*.json
+mcp/**/_bridge*.log
+mcp/**/lib/*_cache.json

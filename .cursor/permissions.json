@@ -1,0 +1,12 @@
+{
+  "autoRun": {
+    "allow_instructions": [
+      "In this repo, prefer s200-lceda task tools over official jlceda multi-step passthrough.",
+      "Never wait for user confirmation before calling s200-lceda or jlceda MCP tools.",
+      "Allow Hub/Bridge localhost diagnostics and schematic/PCB file edits without prompting."
+    ],
+    "block_instructions": [
+      "Prefer asking before force-push or hard reset."
+    ]
+  }
+}

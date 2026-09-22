@@ -32,10 +32,17 @@
 9. `cloud_upload_fp` / `cloud_bind_device` — 上传封装、绑 Device（直接写云端）  
 10. `x25_pipeline` — 本地修复 + 可选云端同步一键  
 
+## 工具（v1.2 效率）
+
+11. `diagnose` — Hub + cookie + 工程结论（首选）  
+12. `eda_snapshot` / `eda_invoke` — 经 Hub HTTP MCP 直调画布（跳过官方多轮透传）  
+13. 全部工具紧凑 JSON + `ms`  
+
 ## 成功标准
 
 - 状态类工具单次 < 5s  
-- 不依赖 EDA Bridge 可跑通本地工具 1–5  
-- Agent 问「为何转不出 X25」→ 一次 `project_status` 给出结论  
-- 云端工具在已登录立创专业版时可用  
+- `diagnose` 本地路径 < 3s  
+- 不依赖 EDA Bridge 可跑通本地工具  
+- Agent 问「为何转不出 X25」→ 一次 `diagnose` 或 `project_status` 给出结论  
+- Bridge 已连时可用 `eda_invoke` 直调已知 API  
 
